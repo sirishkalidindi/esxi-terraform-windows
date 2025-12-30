@@ -11,19 +11,19 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/your-repo/terraform-esxi-windows.git'
+                    url: 'https://github.com/sirishkalidindi/esxi-terraform-windows.git'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                sh 'terraform init'
+                bat 'terraform init'
             }
         }
 
         stage('Terraform Validate') {
             steps {
-                sh 'terraform validate'
+                bat 'terraform validate'
             }
         }
 
@@ -40,7 +40,7 @@ pipeline {
                         variable: 'TF_VAR_admin_password'
                     )
                 ]) {
-                    sh 'terraform plan -out=tfplan'
+                    bat 'terraform plan -out=tfplan'
                 }
             }
         }
@@ -60,21 +60,21 @@ pipeline {
                         variable: 'TF_VAR_admin_password'
                     )
                 ]) {
-                    sh 'terraform apply -auto-approve tfplan'
+                    bat 'terraform apply -auto-approve tfplan'
                 }
             }
         }
     }
 
     post {
+        cleanup {
+            bat 'if exist tfplan del tfplan'
+        }
         success {
             echo '✅ VM deployed successfully'
         }
         failure {
             echo '❌ Deployment failed'
-        }
-        cleanup {
-            sh 'rm -f tfplan || true'
         }
     }
 }
