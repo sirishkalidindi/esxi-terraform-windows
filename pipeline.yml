@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_INPUT = "false"
+        TF_IN_AUTOMATION = "true"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/sirishkalidindi/esxi-terraform-windows.git'
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                bat 'terraform init'
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                bat 'terraform validate'
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ESXI_USER',
+                        usernameVariable: 'TF_VAR_vsphere_user',
+                        passwordVariable: 'TF_VAR_vsphere_password'
+                    ),
+                    string(
+                        credentialsId: 'WINDOWS_ADMIN_PASSWORD',
+                        variable: 'TF_VAR_admin_password'
+                    )
+                ]) {
+                    bat 'terraform plan -out=tfplan'
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                input message: 'Approve VM deployment?', ok: 'Deploy'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ESXI_USER',
+                        usernameVariable: 'TF_VAR_vsphere_user',
+                        passwordVariable: 'TF_VAR_vsphere_password'
+                    ),
+                    string(
+                        credentialsId: 'WINDOWS_ADMIN_PASSWORD',
+                        variable: 'TF_VAR_admin_password'
+                    )
+                ]) {
+                    bat 'terraform apply -auto-approve tfplan'
+                }
+            }
+        }
+    }
+
+    post {
+        cleanup {
+            bat 'if exist tfplan del tfplan'
+        }
+        success {
+            echo '✅ VM deployed successfully'
+        }
+        failure {
+            echo '❌ Deployment failed'
+        }
+    }
+}
