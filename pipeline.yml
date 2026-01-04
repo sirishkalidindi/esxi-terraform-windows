@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_INPUT         = "false"
+        TF_IN_AUTOMATION = "true"
+        TERRAFORM        = "C:\\Terraform\\terraform.exe"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/sirishkalidindi/esxi-terraform-windows.git'
+            }
+        }
+
+        stage('Terraform Version') {
+            steps {
+                powershell '& $env:TERRAFORM --version'
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                powershell '& $env:TERRAFORM init'
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                powershell '& $env:TERRAFORM validate'
+            }
+        }
+
+        stage('Check Credentials') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ESXI_LOGIN',
+                        usernameVariable: 'TF_VAR_vsphere_user',
+                        passwordVariable: 'TF_VAR_vsphere_password'
+                    ),
+                    string(
+                        credentialsId: 'WINDOWS_ADMIN_PASSWORD',
+                        variable: 'TF_VAR_admin_password'
+                    )
+                ]) {
+                    powershell '''
+                        Write-Host "VSphere User: $env:TF_VAR_vsphere_user"
+                        Write-Host "VSphere Password Length: $($env:TF_VAR_vsphere_password.Length)"
+                        Write-Host "Admin Password Length: $($env:TF_VAR_admin_password.Length)"
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ESXI_LOGIN',
+                        usernameVariable: 'TF_VAR_vsphere_user',
+                        passwordVariable: 'TF_VAR_vsphere_password'
+                    ),
+                    string(
+                        credentialsId: 'WINDOWS_ADMIN_PASSWORD',
+                        variable: 'TF_VAR_admin_password'
+                    )
+                ]) {
+                    powershell '''
+                        & $env:TERRAFORM plan `
+                          -var "vsphere_server=192.168.2.30" `
+                          -out=tfplan
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Terraform plan generated successfully'
+        }
+        failure {
+            echo '❌ ESXi VM plan failed'
+        }
+    }
+}
